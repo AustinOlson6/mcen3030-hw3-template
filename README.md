@@ -1,69 +1,103 @@
-# MCEN3030 Homework 3
+function [A,E,R_2] = fit_linear(Z,Y)
+n = size(Z,1);
+Z = [ones(n,1) Z];
+T = transpose(Z);
+A = (T * Z)\(T*Y);
+Y_hat = Z * A;
+E = Y - Y_hat;
+Sr = transpose(E) * E;
+St = sum((Y - mean(Y)).^2);
+R_2 = 1 - (Sr / St);
+end
+data = readmatrix('yacht_hydrodynamics.csv');
 
-The submission for this homework will be different than for homeworks 1 and 2.
-- You will add all necessary code to the ```coding_files``` directory. Note that both problems will use the same ```fit_linear``` function, and a single ```fit_nonlinear``` function should work for both nonlinear models in Problem 2.
-- We will not be autograding this assignment, and so the file naming is not strict. It should be clear if your code is good when you look at the plot in Problem 2!
-- Within GitHub, the top-level ```README.md``` file is what is displayed when you access the repository online. When you have completed your homework and collected all requested information, you will summarize that information in a new ```.md``` file. Rename the existing one, e.g. to ```README_old.md``` -- don't edit it in case you need to go back and see details for the homework! Then create a new ```README.md```. You should be able to edit the file in any text editor, VS Code, MATLAB, or through your web browser. I'll include an image at the bottom of this, so you can see how that is included -- note that the image file is in the same directory as the README.
-- You will also submit a pdf version of your README file to Canvas. [https://md2file.com/](https://md2file.com/) seems to be good and free, with no sign-up. 
+Z = data(:,1:6);   
+Y = data(:,7);     
 
-## Problem 1
+[A,E,R2] = fit_linear(Z,Y);
 
-I have added a data set, "yacht_hydrodynamics.csv", to Canvas. Source: [https://doi.org/10.24432/C5XG7R](https://doi.org/10.24432/C5XG7R).
+disp('Fit parameters:')
+disp(A)
 
-The variables are:
-1. Longitudinal position of the center of buoyancy, adimensional.
-2. Prismatic coefficient, adimensional.
-3. Length-displacement ratio, adimensional.
-4. Beam-draught ratio, adimensional.
-5. Length-beam ratio, adimensional.
-6. Froude number, adimensional.
-7. Residuary resistance per unit weight of displacement, adimensional.
-
-The key output variable is the "residuary resistance", which is essentially the resistance related to the boat creating waves and eddies. We will predict this variable based on a simple linear-regression analysis, fitting $\hat{y}=a_0 + a_1x_1 + a_2 x_2 + ... + a_6 x_6$.
-
-You will use your ```fit_linear(Z,Y)``` code, with outputs ```A```, a column vector of the best fits for the parameters; ```E```, a column vector of residuals from the best fit for each data point, and ```R2```, the $R^2$ value of the prediction.
-
-You will also create a script to drive this and post-process the results. Import the csv data and call the fitting function. Once you have the fitting parameters, calculate the residuary resistance per unit weight for "the cube boat", where all inputs are 1, based on your fit. ($x_1=x_2=x_3=...=1$.)
+disp("R^2 = " + R2_B)
 
 
-In the markdown file you create, report the values of the fit parameters in a table. Comment on which of the parameters are associated with an increase in the resistance and which are associated with a decrease in the resistance. Report the $R^2$ value of the fit and the residuary resistance for "the cube boat".
+x_cube = ones(1,6);
+
+x_cube = [1 x_cube];
+function [A] = fit_nonlinear(x,y,model,seeds)
+p = seeds;                 
+h = 1e-6;
+max = 100;
+for i = 1:max
+
+    Y_hat = model(x,p);
+    E = y - Y_hat;
+
+    z = zeros(length(x),length(p));
+
+    for j = 1:length(p)
+        K = zeros(length(p),1);
+        K(j) = h;
+        Y_diff = model(x,p+K);
+        z(:,j) = (Y_diff - Y_hat)/h;
+    end
+
+    T = transpose(z);
+    D = ((T*z) + h*eye(size(T*z))) \ (T*E);
+    p = p + 0.1*D;
+end
+A = p;
+end
+data = readmatrix('rheo_data.csv');
+
+X = data(:,1);     
+Y = data(:,2);     
+
+% code for model 1
+Z = X;    
+[A_1,E,R2] = fit_linear(Z,Y);
+
+T = A_1(1);
+N = A_1(2);
+
+%code for model 2
+
+Hmodel = @(x,p) p(1) + p(2)*x.^p(3);
+
+seeds_1 = [1; 1; 1];
+
+A_2 = fit_nonlinear(X,Y,Hmodel,seeds_1);
+
+%code for model 3
+
+Pmodel = @(x,p) p(1) + p(2)*x + p(3)*x.^p(4);
 
 
-### Problem 1: extra credit opportunity
+seeds_2 = [100; 1; 1; 1];
 
-For 20% extra credit on this assignment: read about the "Variance Inflation Factor" on the course website. It turns out that the input variables in this data set are highly correlated. Write a function ```VIF_remove``` which takes in the input data (in this case, the first 6 columns of the data set) and then computes the VIF scores for each. In the case where any of the VIFs are larger than 10, remove the one with the highest score and output the pruned data set, printing something like "variable n removed from the data set". (Just remove one, and then you can re-run to see if additional ones should be removed). Discuss which variable(s) you removed in the writeup.
-
-## Problem 2
-
-Use the ```rheo_data.csv``` data set. 
-
-We will fit this data set using three models: 
-- "The Bingham Model": $\hat{y}_B = \tau_y + \eta x$, with two parameters to be fit: $\tau_y$ and $\eta$.
-- "The Hershel-Bulkley Model": $\hat{y}_H = \tau_y + K x^n$, with three parameters to be fit: $\tau_y$, $K$, and $n$.
-- "The Hershel-Bulkley Plus Model": $\hat{y}_P
-= \tau_y+K_1 x + K_2 x^n$ with four parameters to be fit: $\tau_y$, $K_1$, $K_2$, and $n$.
-
-"The yield stress" $\tau_y$ appears in all three models, but each model will fit a different value of $\tau_y$. Similarly, the values of $n$ may be different. Notice that the first model is linear, while the second and third are nonlinear.
-
-You should write two functions and one script for this problem: 
-- ```fit_linear(Z,Y)```... it's the same as the one from Problem 1.
-- ```fit_nonlinear(x,y,model,seeds)``` with ```x``` and ```y``` being the input/output data, ```model``` being an anonymous function for the model, and ```seeds``` a column vector of initial guesses for the parameters. One output, ```A```, a column vector of the best fits for the parameters. This function should be written generally such that it can apply to any model. Tips below.
-- Your script should define the modeling equations above (again, see tips below) and call the two fitting functions (the nonlinear one twice) to determine the best fits. Then, you will create a plot that includes the experimental data in discrete symbols (no connecting line) and the three fits with smooth lines (no discrete symbols). Your plot should include axis labels with units (x is in \[1/s\], y is in \[Pa\]), and a legend. Likely you should increase the font size for all labels and numbers because the default is almost always too small. The plot should be a "semilogx" plot -- log-scaling on the x-axis.
+A_3 = fit_nonlinear(X,Y,Pmodel,seeds_2);
 
 
-Tips for ```fit_nonlinear``` and the script that precedes it:
-- The models may be defined with a vector of parameters, e.g.
-    - In MATLAB: ```Hmodel = @(x,p) p(1) + p(2)*x.^p(3);```
-    - In Python: ```Hmodel = lambda x, p: p[0] + p[1] * x**p[2]```
-    - In Julia: ```Hmodel = (x, p) -> p[1] .+ p[2] .* x .^ p[3]```
-- The benefit of this approach is that it can be used for models with 2,3,4,... any number of parameters. To build your ```Z``` matrix, you can preallocate based on the size of your ```x_data``` and ```length(seeds)```. Then use ```for i=1 to length(seeds)``` and then ```Z(:,i)``` to create column ```i``` based on the numerical partial derivatives.
-- As part of this, you could define an ```H``` column vector that is zeros except for element ```i```, where it is ```h```. This is a nice way to "perturb" the parameters for your partial derivative calculations.
-- You do not need to use a ```for``` loop to iterate through the values in ```x```. If ```x``` is a column vector, the modeling functions will return a column vector.
-- You may "hard-code" ```h=10^-6``` and a maximum number of iterations of 100. You do not need to include a convergence condition or include any error messaging for when the system does not converge.
+x = linspace(min(X), max(X), 200);
 
+y_1 = T + N*x;
+y_2 = Hmodel(x, A_2);
+y_3 = Pmodel(x, A_3);
 
-Include the parameter values and plot in the ```README.md``` markdown file.
+%graph
 
+semilogx(X,Y,'o','MarkerSize',10,'LineWidth',1.5)
+hold on
+semilogx(x,y_1,'LineWidth',2)
+semilogx(x,y_2,'LineWidth',2)
+semilogx(x,y_3,'LineWidth',2)
 
-An example figure:
-![Experiments and fits to glass bead+silicone oil system](hanoglass.png)
+xlabel('Shear Rate [1/s]','FontSize',14)
+ylabel('Shear Stress [Pa]','FontSize',14)
+legend('Data','Bingham','Herschel-Bulkley','HB Plus','Location','best')
+set(gca,'FontSize',20)
+
+y_cube = x_cube * A;
+
+disp("Residuary resistance for cube boat = " + y_cube)
